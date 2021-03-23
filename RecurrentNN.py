@@ -16,6 +16,7 @@ from gensim.models import word2vec
 """loading data"""
 path_prefix = './'
 
+
 def load_training_data(path):
     # 读取数据，判断是否包含Label
     if 'training_label' in path:
@@ -36,7 +37,7 @@ def load_training_data(path):
 
 
 def load_testing_data(path):
-    with open(path, 'r',encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         X = [line.strip('\n').split(' ') for line in lines]
     return X
@@ -53,11 +54,13 @@ def evaluation(outputs, labels):
 
 """Word to vector"""
 
+
 def train_word2vec(x):
     #  sg： 用于设置训练算法，默认为0，对应CBOW算法；sg=1则采用skip-gram算法
     model = word2vec.Word2Vec(x, size=250, window=5, min_count=5,
                               workers=4, iter=1, sg=1)
     return model
+
 
 # # 词频矩阵 word2vec 模型训练
 # if __name__ == '__main__':
@@ -81,33 +84,33 @@ class Preprocess:
         self.idx2word = []
         self.word2idx = {}
         self.embedding_matrix = []
-        
+    
     def get_w2v_model(self):
         self.embedding = word2vec.Word2Vec.load(self.w2v_path)
-        self.embedding_dim = self.embedding.vector_size     # 250
-        
+        self.embedding_dim = self.embedding.vector_size  # 250
+    
     def add_embedding(self, word):
-        vector = torch.empty(1,self.embedding_dim)
+        vector = torch.empty(1, self.embedding_dim)
         torch.nn.init.uniform(vector)
         self.word2idx[word] = len(self.word2idx)
         self.idx2word.append(word)
-        self.embedding_matrix = torch.cat([self.embedding_matrix, vector],0)
-
+        self.embedding_matrix = torch.cat([self.embedding_matrix, vector], 0)
+    
     def make_embedding(self, load=True):
         print('Get embedding ~~~')
         
-        if load :
+        if load:
             print("loading word to vec model ...")
             self.get_w2v_model()
         else:
             raise NotImplementedError
         
         for i, word in enumerate(self.embedding.wv.vocab):
-            print('Get words #{}'.format(i+1), end='\r')
+            print('Get words #{}'.format(i + 1), end='\r')
             self.word2idx[word] = len(self.word2idx)
             self.idx2word.append(word)
             self.embedding_matrix.append(self.embedding[word])
-            
+        
         print('')
         self.embedding_matrix = torch.tensor(self.embedding_matrix)
         self.add_embedding('<PAD>')
@@ -115,13 +118,12 @@ class Preprocess:
         print("total words: {}".format(len(self.embedding_matrix)))
         return self.embedding_matrix
     
-    
     def pad_sequence(self, sentence):
         
         if len(sentence) > self.sen_len:
             sentence = sentence[:self.sen_len]
         else:
-            pad_len  = self.sen_len - len(sentence)
+            pad_len = self.sen_len - len(sentence)
             for _ in range(pad_len):
                 sentence.append(self.word2idx["<PAD>"])
         assert len(sentence) == self.sen_len
@@ -129,21 +131,40 @@ class Preprocess:
     
     def sentence_word2idx(self):
         
-        sentence_list =[]
+        sentence_list = []
         for i, sen in enumerate(self.sentences):
-            print('sentence count #{}'.format(i+1), end='\r')
+            print('sentence count #{}'.format(i + 1), end='\r')
             sentence_idx = []
             for word in sen:
-                if (word in self.word2idx.keys()):
+                if word in self.word2idx.keys():
                     sentence_idx.append(self.word2idx[word])
                 else:
                     sentence_idx.append(self.word2idx['<UNK>'])
-                    
+            
             sentence_idx = self.pad_sequence(sentence_idx)
             sentence_list.append(sentence_idx)
-            
+        
         return torch.LongTensor(sentence_list)
     
     def label_to_tensor(self, y):
         y = [int(label) for label in y]
         return torch.LongTensor(y)
+
+
+"""Data set 自定义 '__init__', '__getitem__', '__len__'"""
+from torch.utils import data
+
+
+class TwitterDataset(data.Dataset):
+    def __init__(self, X, y):
+        self.data = X
+        self.label = y
+    
+    def __getitem__(self, idx):
+        if self.label is None:
+            return self.data[idx]
+        
+        return self.data[idx], self.label[idx]
+    
+    def __len__(self):
+        return len(self.data)
