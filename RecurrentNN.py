@@ -75,6 +75,9 @@ def train_word2vec(x):
 #
 #     print("saving model ...")
 #     model.save(os.path.join(path_prefix, 'model/w2v_all.model'))
+#
+#
+
 
 class Preprocess:
     def __init__(self, sentences, sen_len, w2v_path='./model/w2v_all.model'):
@@ -91,12 +94,14 @@ class Preprocess:
     
     def add_embedding(self, word):
         vector = torch.empty(1, self.embedding_dim)
-        torch.nn.init.uniform(vector)
+        torch.nn.init.uniform_(vector)
         self.word2idx[word] = len(self.word2idx)
         self.idx2word.append(word)
         self.embedding_matrix = torch.cat([self.embedding_matrix, vector], 0)
     
     def make_embedding(self, load=True):
+        # 将训练完成的w2v_model 加载，提出其中的单词和单词对应的vector
+        # 建立单词与索引的列表，并按照索引顺序维护 vector，最后加入<PAD>与<UNK>
         print('Get embedding ~~~')
         
         if load:
@@ -119,7 +124,7 @@ class Preprocess:
         return self.embedding_matrix
     
     def pad_sequence(self, sentence):
-        
+        # 统一句子长度为sen_len，若不够则在句子后面加<PAD>的编码
         if len(sentence) > self.sen_len:
             sentence = sentence[:self.sen_len]
         else:
@@ -168,3 +173,79 @@ class TwitterDataset(data.Dataset):
     
     def __len__(self):
         return len(self.data)
+
+
+"""训练模型 MODEL LSTM"""
+
+
+class LSTM_Net(nn.Module):
+    def __init__(self, embedding, embedding_dim, hidden_dim, num_layers, dropout=0.5, fix_embedding=True):
+        super(LSTM_Net, self).__init__()
+        self.embedding = torch.nn.Embedding(embedding.size(0), embedding.size(1))
+        self.embedding.weight = torch.nn.Parameter(embedding)
+        # fix_embedding 為 False，在訓練過程中，embedding 也會跟著被訓練
+        self.embedding.weight.requires_grad = False if fix_embedding else True
+        self.embedding_dim = embedding.size(1)
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=num_layers, batch_first=True)
+        self.classifier = nn.Sequential(nn.Dropout(dropout), nn.Linear(hidden_dim, 1), nn.Sigmoid())
+    
+    def forward(self, inputs):
+        inputs = self.embedding(inputs)
+        x, _ = self.lstm(inputs, None)
+        # x 的 dimension (batch, seq_len, hidden_size)
+        # 取用 LSTM 最後一層的 hidden state
+        x = x[:, -1, :]
+        x = self.classifier(x)
+        
+        return x
+
+
+def training(batch_size, n_epoch, lr, model_dir, train, valid, model, device):
+    total = sum(p.numel() for p in model.parameters())
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+
+if __name__ == '__main__':
+    # # main
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    
+    # 处理data
+    train_with_label = './hw4/training_label.txt'
+    train_no_label = './hw4/training_nolabel.txt'
+    testing_data = './hw4/testing_data.txt'
+    
+    w2v_path = './model/w2v_all.model'
+    
+    sen_len = 20
+    fix_embedding = True
+    batch_size = 128
+    epoch = 5
+    lr = 0.001
+    
+    train_x, y = load_training_data(train_with_label)
+    train_x_no_label = load_training_data(train_no_label)
+    
+    # 数据预处理
+    preprocess = Preprocess(train_x, sen_len)
+    embedding = preprocess.make_embedding(load=True)
+    train_x = preprocess.sentence_word2idx()
+    y = preprocess.label_to_tensor(y)
+    
+    # 制作模型
+    model = LSTM_Net(embedding, embedding_dim=250, hidden_dim=150, num_layers=1, fix_embedding=fix_embedding)
+    model = model.to(device)
+    
+    # 训练数据集切分为train和validation
+    X_train, X_val, y_train, y_val = train_x[:18000], train_x[18000:], y[:18000], y[18000:]
+    
+    # data 转变为DataSet
+    train_dataset = TwitterDataset(X_train, y_train)
+    val_dataset = TwitterDataset(X_val, y_val)
+    
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size,
+                                               shuffle=True, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(dataset=X_val, batch_size=batch_size,
+                                             shuffle=False, num_workers=4)
