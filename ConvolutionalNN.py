@@ -152,7 +152,7 @@ class Classifier(nn.Module):
 
 """训练模型"""
 
-model = Classifier()
+model = Classifier().cuda()
 loss = nn.CrossEntropyLoss()  # 分类问题，损失函数为交叉熵函数
 # 优化方法为 Adam
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -169,21 +169,21 @@ for epoch in range(num_epoch):
     # 训练数据
     for i, data in enumerate(train_loader):
         optimizer.zero_grad()  # 梯度归零
-        train_pred = model(data[0])  # data 包含训练与标签，data[0]为训练数据
-        batch_loss = loss(train_pred, data[1])
+        train_pred = model(data[0].cuda())  # data 包含训练与标签，data[0]为训练数据
+        batch_loss = loss(train_pred, data[1].cuda())
         batch_loss.backward()  # 计算误差的梯度
         optimizer.step()  # 更新优化
         
-        train_acc += np.sum(np.argmax(train_pred.data.numpy(), axis=1) == data[1].numpy())
+        train_acc += np.sum(np.argmax(train_pred.cpu().data.numpy(), axis=1) == data[1].numpy())
         train_loss += batch_loss.item()
     
     model.eval()
     with torch.no_grad():
         for i, data in enumerate(val_loader):
-            val_pred = model(data[0])
-            batch_loss = loss(val_pred, data[1])
+            val_pred = model(data[0].cuda())
+            batch_loss = loss(val_pred, data[1].cuda())
             
-            val_acc += np.sum(np.argmax(val_pred.data.numpy(), axis=1) == data[1].numpy())
+            val_acc += np.sum(np.argmax(val_pred.cpu().data.numpy(), axis=1) == data[1].numpy())
             val_loss += batch_loss.item()
         
         print('[%03d/%03d] %2.2f sec(s) Train Acc: %3.6f Loss: %3.6f | Val Acc: %3.6f loss: %3.6f' % \
@@ -198,7 +198,7 @@ train_val_y = np.concatenate((train_y, val_y), axis=0)
 train_val_set = ImgDataset(train_val_x, train_val_y, train_transform)
 train_val_loader = DataLoader(train_val_set, batch_size=batch_size, shuffle=True)
 
-model_best = Classifier()
+model_best = Classifier().cuda()
 loss = nn.CrossEntropyLoss()  # 因為是 classification task，所以 loss 使用 CrossEntropyLoss
 optimizer = torch.optim.Adam(model_best.parameters(), lr=0.001)  # optimizer 使用 Adam
 num_epoch = 30
@@ -211,12 +211,12 @@ for epoch in range(num_epoch):
     model_best.train()
     for i, data in enumerate(train_val_loader):
         optimizer.zero_grad()
-        train_pred = model_best(data[0])
-        batch_loss = loss(train_pred, data[1])
+        train_pred = model_best(data[0].cuda())
+        batch_loss = loss(train_pred, data[1].cuda())
         batch_loss.backward()
         optimizer.step()
         
-        train_acc += np.sum(np.argmax(train_pred.data.numpy(), axis=1) == data[1].numpy())
+        train_acc += np.sum(np.argmax(train_pred.cpu().data.numpy(), axis=1) == data[1].numpy())
         train_loss += batch_loss.item()
         
         # 將結果 print 出來

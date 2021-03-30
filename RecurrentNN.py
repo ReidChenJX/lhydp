@@ -249,3 +249,5 @@ if __name__ == '__main__':
                                                shuffle=True, num_workers=4)
     val_loader = torch.utils.data.DataLoader(dataset=X_val, batch_size=batch_size,
                                              shuffle=False, num_workers=4)
+    
+    
