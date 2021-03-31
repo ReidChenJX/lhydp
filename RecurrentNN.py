@@ -19,19 +19,21 @@ path_prefix = './'
 
 def load_training_data(path):
     # 读取数据，判断是否包含Label
+    # 优化1：保留单词间的‘， 如i'm
+    
     if 'training_label' in path:
         with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-            lines = [line.strip('\n').split(' ') for line in lines]
+            lines = [line.strip('\n').replace(' \' ','\'').split() for line in lines]
         
-        x = [line[2:] for line in lines]
-        y = [line[0] for line in lines]
-        
+            x = [line[2:] for line in lines]
+            y = [line[0] for line in lines]
+
         return x, y
     else:
         with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-            x = [line.strip('\n').split(' ') for line in lines]
+            x = [line.strip('\n').replace(' \' ','\'').split()  for line in lines]
         
         return x
 
@@ -39,7 +41,7 @@ def load_training_data(path):
 def load_testing_data(path):
     with open(path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        X = [line.strip('\n').split(' ') for line in lines]
+        X = [",".join(line.strip('\n').replace(' \' ','\'').split(',')[1:]).strip() for line in lines]
     return X
 
 
@@ -61,7 +63,7 @@ def train_word2vec(x):
                               workers=4, iter=1, sg=1)
     return model
 
-
+#
 # # 词频矩阵 word2vec 模型训练
 # if __name__ == '__main__':
 #     print("loading training data ...")
@@ -71,12 +73,11 @@ def train_word2vec(x):
 #     print("loading testing data ...")
 #     test_x = load_testing_data('./hw4/testing_data.txt')
 #
-#     model = train_word2vec(train_x + train_x_no_label + test_x)
+#     model = train_word2vec(train_x + train_x_no_label)
 #
 #     print("saving model ...")
 #     model.save(os.path.join(path_prefix, 'model/w2v_all.model'))
-#
-#
+
 
 
 class Preprocess:
@@ -90,7 +91,7 @@ class Preprocess:
     
     def get_w2v_model(self):
         self.embedding = word2vec.Word2Vec.load(self.w2v_path)
-        self.embedding_dim = self.embedding.vector_size  # 250
+        self.embedding_dim = self.embedding.vector_size  # 250 词频长度
     
     def add_embedding(self, word):
         vector = torch.empty(1, self.embedding_dim)
@@ -190,7 +191,15 @@ class LSTM_Net(nn.Module):
         self.num_layers = num_layers
         self.dropout = dropout
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=num_layers, batch_first=True)
-        self.classifier = nn.Sequential(nn.Dropout(dropout), nn.Linear(hidden_dim, 1), nn.Sigmoid())
+        self.classifier = nn.Sequential(nn.Dropout(dropout),
+                                        nn.Linear(hidden_dim, 64),
+                                        nn.Dropout(dropout),
+                                        nn.Linear(64, 32),
+                                        nn.Dropout(dropout),
+                                        nn.Linear(32, 16),
+                                        nn.Dropout(dropout),
+                                        nn.Linear(16, 1),
+                                        nn.Sigmoid())
     
     def forward(self, inputs):
         inputs = self.embedding(inputs)
@@ -247,7 +256,6 @@ if __name__ == '__main__':
     
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size,
                                                shuffle=True, num_workers=4)
-    val_loader = torch.utils.data.DataLoader(dataset=X_val, batch_size=batch_size,
-                                             shuffle=False, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(dataset=X_val, batch_size=batch_size, shuffle=False, num_workers=4)
     
-    
+
