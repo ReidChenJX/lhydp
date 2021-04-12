@@ -23,6 +23,8 @@ def readfile(path, label):
     
     for i, file in enumerate(image_dir):
         img = cv2.imread(os.path.join(path, file))
+        # CV2的imread默认存储的颜色空间顺序是BGR，与matplot显示用的imshow的颜色顺序RGB相反，需转化。
+        img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
         x[i, :, :] = cv2.resize(img, (128, 128))  # x 为四维np.zero
         
         if label:
